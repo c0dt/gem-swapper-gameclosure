@@ -43,7 +43,7 @@ exports = Class(View, function(supr) {
     
     this.onInputMove = function(event, point){
             
-        if(this.moving || this.startpoint == undefined) {
+        if(this.moving || this.startpoint == undefined || this.dirty) {
             return;
         }
 
@@ -166,6 +166,7 @@ exports = Class(View, function(supr) {
     
     //swap action
     this.swap = function(from, to) {
+        this.moving = true;
         this.fromGem = this.getGem(from);
         var toGem = this.getGem(to);
 
