@@ -1,5 +1,6 @@
 import ui.View as View;
 import ui.ImageView as ImageView;
+import ui.ViewPool as ViewPool;
 import math.geom.Point as Point;
 import animate;
 
@@ -7,6 +8,10 @@ import device;
 
 //gem swap board main logic
 exports = Class(View, function(supr) {
+    this.imageViewPool;
+    this.moveCount = 0;
+    this.score = 0;
+    
     this.gemPrototypes = [
         {
             image : "resources/images/gems/gem_01.png"
@@ -30,6 +35,39 @@ exports = Class(View, function(supr) {
     
     // gems data holder
     this.gems = [];
+    
+    //
+    this.onInputStart = function(event, point){
+        this.startpoint = point;
+    };
+    
+    this.onInputMove = function(event, point){
+            
+        if(this.moving || this.startpoint == undefined) {
+            return;
+        }
+
+        var delta = new Point(point.x,point.y).subtract(this.startpoint);
+
+        if(delta.getSquaredMagnitude() > this.MOVE_DELTA) {
+            this.moving = true;
+
+            var from = this.pixelToBoardPosition(this.startpoint);
+            var to = this.pixelToBoardPositionWithDirection(this.startpoint, delta);
+
+            this.startpoint = undefined;
+            this.swapSession = {
+                from : from,
+                to : to
+            };
+            this.swap(from,to);
+        }
+    };
+    
+    this.onInputSelect = function(event, point){
+        this.startpoint = undefined;
+    };
+    
     /**
      * init
      */
@@ -37,8 +75,9 @@ exports = Class(View, function(supr) {
         opts = merge(opts, {
             x: 0,
             y: 0,
-            width: 519,
-            height: 519,
+            width: 536,
+            height: 536,
+            clip : true
           });
         
         this.dirty = true;
@@ -53,41 +92,45 @@ exports = Class(View, function(supr) {
         
         supr(this, 'init', [opts]);
         
-        this.on("InputStart", function(event, point){
-             this.startpoint = point;
-        });
-        
-        this.on("InputMove", function(event, point){
-            
-            if(this.moving || this.startpoint == undefined) {
-                return;
+        for(var i = 0; i < this.MAX_ROW; i++) {
+            for(var j = 0; j < this.MAX_COLUMN; j++) {
+                this.gems.push(undefined);
             }
-            
-            var delta = new Point(point.x,point.y).subtract(this.startpoint);
-            
-            if(delta.getSquaredMagnitude() > this.MOVE_DELTA) {
-                this.moving = true;
-                
-                var from = this.pixelToBoardPosition(this.startpoint);
-                var to = this.pixelToBoardPositionWithDirection(this.startpoint, delta);
-                
-                this.startpoint = undefined;
-                this.swapSession = {
-                    from : from,
-                    to : to
-                };
-                this.swap(from,to);
-            }
-        });
+        }
         
-        this.on("InputSelect", function(event, point){
-            this.startpoint = undefined;
-            
-            console.log(this.pixelToBoardPosition(point));
-        });
+        this.on("InputStart", this.onInputStart.bind(this));
+        
+        this.on("InputMove", this.onInputMove.bind(this));
+        
+        this.on("InputSelect", this.onInputSelect.bind(this));
+        
+        this.imageViewPool = new ViewPool({
+			ctor: ImageView,
+			initCount: 64,
+			initOpts: {
+				superview: this,
+				width: this.GemWidth,
+				height: this.GemHeight,
+				image: "resources/images/gems/gem_01.png"
+			}
+		});
         
         this.newgame();
     };
+    
+    this.obtainGemFromPool = function(x,y,image) {
+        var view = this.imageViewPool.obtainView();
+        view.updateOpts({
+            superview: this,
+            x: x,
+            y: y,
+            width: this.GemWidth,
+            height: this.GemHeight,
+            visible: true
+        });
+        view.setImage(image);
+        return view;
+    }
     
     //convert board coordinates to pixel coordinates
     this.boardToPixelPosition = function(x,y) {
@@ -173,9 +216,9 @@ exports = Class(View, function(supr) {
     this.getMatches = function(gem) {
         var point = gem.point;
         
-        var matches = [];
+        var xmatches = [];
         
-        matches.push(gem);
+        xmatches.push(gem);
         
         for(var i = point.x - 1; i >=0; i-- ) {
 			var p = new Point (i, point.y);
@@ -185,7 +228,7 @@ exports = Class(View, function(supr) {
 				break;
 			} else {
                 newGem.checked = true;
-				matches.push(newGem);
+				xmatches.push(newGem);
 			}
 		}
         
@@ -196,14 +239,16 @@ exports = Class(View, function(supr) {
 				break;
 			} else {
                 newGem.checked = true;
-				matches.push(newGem);
+				xmatches.push(newGem);
 			}
 		}
         
-        if(matches.length < 3) {
-            matches = [];
-            matches.push(gem);
+        if(xmatches.length < 3) {
+            xmatches = [];
         }
+        
+        var ymatches = [];
+        ymatches.push(gem);
         
         for(var i = point.y - 1; i >=0; i-- ) {
             var p = new Point (point.x, i);
@@ -212,7 +257,7 @@ exports = Class(View, function(supr) {
                 break;
             } else {
                 newGem.checked = true;
-				matches.push(newGem);
+				ymatches.push(newGem);
             }
         }
 
@@ -223,16 +268,16 @@ exports = Class(View, function(supr) {
                 break;
             } else {
                 newGem.checked = true;
-				matches.push(newGem);
+				ymatches.push(newGem);
             }
         }
 
         
-        if(matches.length < 3) {
-            matches = [];
+        if(ymatches.length < 3) {
+            ymatches = [];
         }
         
-        return matches;
+        return xmatches.concat(ymatches);
     }
     
     //clear matched gems
@@ -249,8 +294,11 @@ exports = Class(View, function(supr) {
 					if (count > 0) {
 						allCount += count;
 						for(var gemIndex in gems) {
+                            this.addScore(gems.length);
                             var toRemove = gems[gemIndex];
+                            toRemove.view.style.visible = false;
                             toRemove.view.removeFromSuperview();
+                            this.imageViewPool.releaseView(toRemove.view);
 							this.setGem (undefined, toRemove.point);
 						}
 					}
@@ -269,6 +317,11 @@ exports = Class(View, function(supr) {
 
 		return allCount;
 	}
+    
+    this.addScore = function(count) {
+        this.emit('BoardView:scoreChange');
+        this.score += count * 10;
+    }
     
     //drop gems
     this.dropGems = function() {
@@ -316,14 +369,9 @@ exports = Class(View, function(supr) {
                     var prototype = this.gemPrototypes[index];
                     
 					var position = this.boardToPixelPosition (from.x,from.y);
-					var view = new ImageView(merge(position, {
-                        superview : this,
-                        width : this.GemWidth,
-                        height : this.GemHeight,
-                        image : prototype.image,
-                        zIndex : dropCount
-                    }));
-                
+                    
+                    var view = this.obtainGemFromPool(position.x,position.y, prototype.image);
+                    //zIndex : dropCount
                     this.setGem({
                         data : index,
                         view : view,
@@ -349,6 +397,10 @@ exports = Class(View, function(supr) {
         var count = this.clearGems();
         
         if(count > 0) {
+            if(this.swapSession != undefined) {
+                this.moveCount++;
+                this.emit('BoardView:moveCountChange');
+            }
             this.swapSession = undefined;
             this.moving = true;
             this.dropGems();
@@ -362,31 +414,57 @@ exports = Class(View, function(supr) {
             if(this.swapSession != undefined) {
                 this.swap(this.swapSession.to,this.swapSession.from);
                 this.swapSession = undefined;
+            } else {
+                this.emit('BoardView:swapFinish');
             }
             
             this.dirty = false;
+            
         }
     }
     
-    
     this.newgame = function() {
+        
+        this.removeAllSubviews();
+        this.imageViewPool.releaseAllViews();
+        
+        for(var i = 0; i < this.gems.length; i++) {
+            var toRemove = this.gems[i];
+            if(toRemove != undefined) {
+                toRemove.view.style.visible = false;
+                this.imageViewPool.releaseView(toRemove.view);
+                this.setGem (undefined, toRemove.point);  
+            }
+        }
+        
+        this.moveCount = 0;
+        this.score = 0;
+        
         for(var i = 0; i < this.MAX_ROW; i++) {
             for(var j = 0; j < this.MAX_COLUMN; j++) {
-                var index = Math.floor(Math.random() * 5);
-                var prototype = this.gemPrototypes[index];
-                var gem = new ImageView(merge(this.boardToPixelPosition(j,i), {
-                        superview : this,
-                        width : this.GemWidth,
-                        height : this.GemHeight,
-                        image : prototype.image,
-                    }));
-                
-                this.gems.push({
-                    point : new Point(j,i),
-                    data : index,
-                    view : gem,
-                    checked : false
-                });
+                var ok = false;
+                while(!ok) {
+                    var index = Math.floor(Math.random() * 5);
+                    var prototype = this.gemPrototypes[index];
+                    var p = this.boardToPixelPosition(j,i);
+                    var gem = this.obtainGemFromPool(p.x,p.y,prototype.image);
+                    var newGem = {
+                        point : new Point(j,i),
+                        data : index,
+                        view : gem,
+                        checked : false
+                    };
+
+                    var matches = this.getMatches(newGem);
+
+                    if(matches.length == 0) {
+                        this.setGem (newGem, newGem.point);
+                        ok = true;
+                    } else {
+                        this.imageViewPool.releaseView(gem);
+                    }
+                }
+
             }
         }
     }

@@ -12,7 +12,10 @@ exports = Class(GC.Application, function () {
     var titlescreen = new TitleScreen();
     var gamescreen = new GameScreen();
       
-    this.view.style.backgroundColor = '#008a42';
+    this.view.style.backgroundColor = '#000000';
+      
+    this.baseWidth = 576;
+    this.baseheight = 1024;
 
     var rootView = new StackView({
       superview: this,
@@ -24,8 +27,17 @@ exports = Class(GC.Application, function () {
       scale: device.width / 576
     });
     
-    //rootView.push(titlescreen);
-    rootView.push(gamescreen);
+    rootView.push(titlescreen);
+    
+    titlescreen.on('titlescreen:start', function () {
+      rootView.push(gamescreen);
+      gamescreen.emit('app:start');
+    });
+      
+    gamescreen.on('gamescreen:end', function () {
+      rootView.pop();
+    });
+      
   };
   
   this.launchUI = function () {};
