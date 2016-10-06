@@ -293,14 +293,18 @@ exports = Class(View, function(supr) {
 					var count = gems.length;
 					if (count > 0) {
 						allCount += count;
+                        var clearedGemLocations = [];
 						for(var gemIndex in gems) {
                             this.addScore(gems.length);
                             var toRemove = gems[gemIndex];
                             toRemove.view.style.visible = false;
                             toRemove.view.removeFromSuperview();
                             this.imageViewPool.releaseView(toRemove.view);
+                            var location = this.boardToPixelPosition(toRemove.point.x,toRemove.point.y);
+                            clearedGemLocations.push(location);
 							this.setGem (undefined, toRemove.point);
 						}
+                        this.emit("BoardView:gemsClear", clearedGemLocations);
 					}
 				}
 			}

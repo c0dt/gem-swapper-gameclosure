@@ -17,7 +17,7 @@ exports = Class(View, function(supr) {
               y: 100,
               width: 576,
               height : 300,
-              text: 'Gem\nSwapper',
+              text: 'Yet Another\nGem\nSwapper',
               size: 72,
               color : '#ffffff',
               shadowColor: '#999999',
@@ -35,16 +35,9 @@ exports = Class(View, function(supr) {
               color : '#ffffff',
               shadowColor: '#999999'
         });
-        
-        var startbutton = new View({
-          superview: this,
-          x: 0,
-          y: 0,
-          width: 576,
-          height: 1024
-        });
 
-        startbutton.on('InputSelect', bind(this, function () {
+        //any touch to start
+        this.on('InputSelect', bind(this, function () {
             this.emit('titlescreen:start');
         }));
     };
